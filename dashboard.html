@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard ผลประเมิน | Robotics-ROS</title>
+<style>
+:root{font-family:system-ui,Tahoma,"Noto Sans Thai",sans-serif;color:#17304c;background:#eff5fa}
+*{box-sizing:border-box}body{margin:0}main{max-width:1280px;margin:auto;padding:20px 16px 80px}
+header{background:#10264c;color:white;padding:24px 16px}header>div{max-width:1250px;margin:auto}header a{color:#a3f8ea}
+h1{margin:6px 0;font-size:28px}h2{font-size:21px;margin:0 0 12px}
+p{line-height:1.65}.muted{color:#64778e;font-size:13px}.panel{background:white;border:1px solid #d5e0ec;border-radius:14px;padding:18px;margin:14px 0}
+.row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}label{display:block;min-width:150px;flex:1;font-size:14px}input,select,button{font:inherit;padding:10px;border-radius:8px;border:1px solid #bacddd;width:100%}
+button{width:auto;cursor:pointer;background:#0c7284;color:white;border-color:#0c7284}button.secondary{background:white;color:#075972}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metric{background:#edf6f8;border-radius:12px;padding:16px}.metric strong{display:block;font-size:29px;margin:6px 0}.metric small{color:#516b7c}
+table{border-collapse:collapse;width:100%;min-width:800px;font-size:13px}td,th{padding:8px;border:1px solid #d8e3ed;text-align:center}td:nth-child(3){text-align:left}th{background:#e1f0f4}.scroll{overflow:auto}.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}.bars{display:grid;gap:10px}.barrow{display:grid;grid-template-columns:minmax(85px,160px) 1fr 52px;gap:10px;align-items:center;font-size:13px}.track{height:15px;background:#dfebef;border-radius:30px;overflow:hidden}.fill{height:100%;background:#1a8a9a}.fill.alt{background:#6761ba}
+svg{width:100%;height:auto}.badge{background:#e1f1eb;padding:5px 8px;border-radius:6px}
+#message{font-weight:600} .no-data{text-align:center;padding:30px;background:#f1f6fa;border-radius:10px}
+@media(max-width:780px){.grid{grid-template-columns:repeat(2,1fr)}.charts{grid-template-columns:1fr}h1{font-size:23px}}
+@media print{body{background:white}header{color:black;background:white}header a,.controls,.noprint{display:none!important}main{padding:0}.panel{break-inside:avoid}table{min-width:0;font-size:10px}.grid{grid-template-columns:repeat(4,1fr)}}
+</style></head><body>
+<header><div><a href="index.html">← กลับหน้าเรียนวิทยาการหุ่นยนต์</a><h1>📊 Dashboard ผลประเมินรายวัน — Robotics-ROS</h1><p>พฤติกรรม 5 ข้อ (เต็ม 15) + คุณลักษณะ 6 ข้อ (เต็ม 18) • 20 สัปดาห์ • 40 วันเรียนต่อคน</p></div></header>
+<main>
+<section class="panel controls"><h2>เข้าสู่ระบบและเลือกข้อมูล</h2><div class="row">
+<label>รหัสครู<input id="code" type="password" autocomplete="off" placeholder="รหัสครูของระบบประเมินเดิม"></label>
+<label>ห้องเรียน<input id="room" value="ม.4/2" maxlength="32"></label>
+<label>ช่วงข้อมูล<select id="scope"><option value="term">ทั้งภาคเรียน</option><option value="week">รายสัปดาห์</option><option value="day">รายวัน</option></select></label>
+<label>สัปดาห์ที่<select id="week"></select></label>
+<label>วันที่สอน<select id="session"><option value="1">วันแรก — 2 คาบ</option><option value="2">วันที่สอง — 1 คาบ</option></select></label>
+<label>นักเรียน<select id="student"><option value="all">ทุกคน</option></select></label>
+<button onclick="load()">โหลดข้อมูลจริง</button><button class="secondary" onclick="downloadCSV()">ส่งออกข้อมูล CSV</button><button class="secondary" onclick="window.print()">พิมพ์ / PDF</button>
+</div><p id="message" role="status">กรุณากรอกรหัสครูและกดโหลดข้อมูล</p></section>
+<section class="panel"><h2>ภาพรวมการประเมิน <span id="filterTitle" class="muted"></span></h2>
+<div class="grid"><div class="metric"><small>นักเรียนที่มีผลในช่วงที่เลือก</small><strong id="students">—</strong></div>
+<div class="metric"><small>จำนวนครั้งที่ประเมินจริง</small><strong id="records">—</strong></div>
+<div class="metric"><small>พฤติกรรมเฉลี่ย /15</small><strong id="bavg">—</strong></div>
+<div class="metric"><small>คุณลักษณะเฉลี่ย /18</small><strong id="aavg">—</strong></div></div>
+<p class="muted" id="coverage">จำนวนครั้งที่ประเมินจริงไม่เท่ากับจำนวนวันที่เข้าเรียน การขาดข้อมูลไม่ถูกนับเป็น 0 คะแนน และไม่สร้างคะแนนเติมให้อัตโนมัติ</p>
+</section>
+<section class="charts">
+<div class="panel"><h2>คะแนนเฉลี่ยรายข้อ — พฤติกรรม</h2><div id="behaviorBars" class="bars no-data">โปรดโหลดข้อมูลก่อน</div></div>
+<div class="panel"><h2>คะแนนเฉลี่ยรายข้อ — คุณลักษณะ</h2><div id="attributeBars" class="bars no-data">โปรดโหลดข้อมูลก่อน</div></div>
+</section>
+<section class="panel"><h2>แนวโน้มคะแนนรายสัปดาห์</h2><p class="muted">คิดจากคะแนนที่ครูประเมินจริงในแต่ละสัปดาห์ แสดงสองเส้นเป็นร้อยละของคะแนนเต็ม เพื่อเปรียบเทียบคนละแบบประเมินได้</p><div id="trend" class="no-data">โปรดโหลดข้อมูลก่อน</div></section>
+<section class="panel"><h2>ตารางสรุปรายบุคคล</h2><div class="scroll"><table><thead><tr><th>รหัส</th><th>ชื่อ–นามสกุล</th><th>ครั้งที่มีผล</th><th>พฤติกรรมเฉลี่ย /15</th><th>คุณลักษณะเฉลี่ย /18</th><th>คะแนนรวมเฉลี่ย /33</th></tr></thead><tbody id="studentRows"><tr><td colspan="6">ยังไม่มีข้อมูล</td></tr></tbody></table></div></section>
+<section class="panel"><h2>ประวัติการประเมินตามตัวกรอง</h2><div class="scroll"><table><thead><tr><th>สัปดาห์</th><th>วันเรียน</th><th>วันที่สอนจริง</th><th>นักเรียน</th><th>คะแนนพฤติกรรม /15</th><th>คะแนนคุณลักษณะ /18</th><th>รวม /33</th><th>ผู้ประเมิน</th></tr></thead><tbody id="history"><tr><td colspan="8">ยังไม่มีข้อมูล</td></tr></tbody></table></div></section>
+<p class="muted">ข้อมูลนี้ใช้เพื่อการติดตามและประกอบหลักฐานการจัดการเรียนรู้ ผู้ที่ยังไม่มีผลประเมินจะไม่ปรากฏในค่าเฉลี่ย และรายชื่อนักเรียนทั้งหมดของห้องยังต้องตรวจเทียบกับทะเบียนนักเรียนจริง</p>
+</main>
+<script>
+const API='https://ckiltjhcvxriwjfreqfz.supabase.co/functions/v1/teacher-robotics-assessment';
+const $=id=>document.getElementById(id);
+const bNames=['แสดงความคิดเห็นอย่างมีเหตุผล','ยอมรับฟังผู้อื่น','ทำงานตามหน้าที่','รับผิดชอบและตรงต่อเวลา','ใช้เทคโนโลยีเหมาะสม'];
+const aNames=['มีวินัย','ใฝ่เรียนรู้','มุ่งมั่นในการทำงาน','รับผิดชอบ','รับฟังผู้อื่น','ใช้เทคโนโลยีเหมาะสม'];
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const total=a=>a.reduce((x,y)=>x+Number(y||0),0);
+const average=a=>a.length?total(a)/a.length:null;
+const pretty=v=>v===null?'—':v.toFixed(2);
+const isArray=(a,n)=>Array.isArray(a)&&a.length===n&&a.every(v=>Number.isInteger(v)&&v>=1&&v<=3);
+let allRows=[],selectedRows=[],loadedRoom='';
+$('week').innerHTML=Array.from({length:20},(_,i)=>'<option value="'+(i+1)+'">สัปดาห์ '+(i+1)+'</option>').join('');
+function safeRows(data){return (data||[]).filter(x=>isArray(x.behavior_scores,5)&&isArray(x.attribute_scores,6)&&Number.isInteger(x.assessment_week)&&[1,2].includes(x.session_no))}
+function filters(){const scope=$('scope').value,w=Number($('week').value),s=Number($('session').value),student=$('student').value;return allRows.filter(x=>(scope==='term'||x.assessment_week===w)&&(scope!=='day'||x.session_no===s)&&(student==='all'||x.student_code===student))}
+function render(){
+ selectedRows=filters();
+ const scope=$('scope').value;
+ $('week').disabled=scope==='term';
+ $('session').disabled=scope!=='day';
+ $('filterTitle').textContent=scope==='term'?'ตลอดภาคเรียน':scope==='week'?'สัปดาห์ '+$('week').value:'สัปดาห์ '+$('week').value+' วันเรียน '+$('session').value;
+ const rows=selectedRows;
+ const students=[...new Set(rows.map(x=>x.student_code))];
+ $('students').textContent=students.length.toLocaleString('th-TH');
+ $('records').textContent=rows.length.toLocaleString('th-TH');
+ $('bavg').textContent=pretty(average(rows.map(x=>total(x.behavior_scores))));
+ $('aavg').textContent=pretty(average(rows.map(x=>total(x.attribute_scores))));
+ const scopedDays=scope==='term'?40:scope==='week'?2:1;
+ $('coverage').textContent='ประเมินจริง '+rows.length+' ครั้ง จากช่วงที่เลือก '+scopedDays+' วันเรียนต่อคน • นักเรียนที่มีข้อมูล '+students.length+' คน (ไม่รวมผู้ที่ยังไม่มีผล) • ข้อมูลว่างไม่ถือเป็นศูนย์';
+ drawBars('behaviorBars',bNames,rows.map(x=>x.behavior_scores),'fill');
+ drawBars('attributeBars',aNames,rows.map(x=>x.attribute_scores),'fill alt');
+ drawTrend(rows);
+ const byStudent=new Map();
+ for(const x of rows){const k=x.student_code;if(!byStudent.has(k))byStudent.set(k,{id:k,name:x.student_name,rows:[]});byStudent.get(k).rows.push(x)}
+ $('studentRows').innerHTML=[...byStudent.values()].sort((a,b)=>a.id.localeCompare(b.id,'th',{numeric:true})).map(x=>{let b=average(x.rows.map(r=>total(r.behavior_scores))),a=average(x.rows.map(r=>total(r.attribute_scores)));return '<tr><td>'+esc(x.id)+'</td><td>'+esc(x.name)+'</td><td>'+x.rows.length+'</td><td>'+pretty(b)+'</td><td>'+pretty(a)+'</td><td>'+pretty(b+a)+'</td></tr>'}).join('')||'<tr><td colspan="6">ยังไม่มีข้อมูลที่ตรงกับตัวกรอง</td></tr>';
+ $('history').innerHTML=rows.slice().sort((a,b)=>a.assessment_week-b.assessment_week||a.session_no-b.session_no||a.student_code.localeCompare(b.student_code,'th',{numeric:true})).map(x=>'<tr><td>'+x.assessment_week+'</td><td>'+x.session_no+'</td><td>'+esc(x.teaching_date||'—')+'</td><td>'+esc(x.student_code+' '+x.student_name)+'</td><td>'+total(x.behavior_scores)+'</td><td>'+total(x.attribute_scores)+'</td><td>'+total(x.behavior_scores.concat(x.attribute_scores))+'</td><td>'+esc(x.evaluator_name)+'</td></tr>').join('')||'<tr><td colspan="8">ยังไม่มีข้อมูลที่ตรงกับตัวกรอง</td></tr>';
+}
+function drawBars(id,names,sets,klass){if(!sets.length){$(id).className='no-data';$(id).textContent='ยังไม่มีคะแนนที่บันทึกจริงในช่วงที่เลือก';return}$(id).className='bars';$(id).innerHTML=names.map((n,i)=>{let value=average(sets.map(s=>s[i])),pct=value/3*100;return '<div class="barrow"><span>'+esc(n)+'</span><div class="track"><div class="'+klass+'" style="width:'+pct.toFixed(2)+'%"></div></div><strong>'+pretty(value)+'</strong></div>'}).join('')}
+function drawTrend(rows){
+ if(!rows.length){$('trend').className='no-data';$('trend').textContent='ยังไม่มีคะแนนสำหรับแสดงกราฟ';return}
+ const weeks=[...new Set(rows.map(x=>x.assessment_week))].sort((a,b)=>a-b);
+ const values=weeks.map(w=>{let x=rows.filter(r=>r.assessment_week===w);return {week:w,b:average(x.map(y=>total(y.behavior_scores)))/15*100,a:average(x.map(y=>total(y.attribute_scores)))/18*100}});
+ const width=920,height=300,left=55,right=20,top=22,bottom=45,plotW=width-left-right,plotH=height-top-bottom;
+ const px=i=>left+(values.length===1?plotW/2:i*plotW/(values.length-1)),py=v=>top+plotH-v*plotH/100;
+ const line=key=>values.map((v,i)=>(i?'L':'M')+px(i).toFixed(1)+' '+py(v[key]).toFixed(1)).join(' ');
+ let svg='<svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="กราฟแนวโน้มรายสัปดาห์ของคะแนนพฤติกรรมและคุณลักษณะ">';
+ for(let tick=0;tick<=100;tick+=25){let y=py(tick);svg+='<line x1="'+left+'" y1="'+y+'" x2="'+(width-right)+'" y2="'+y+'" stroke="#dee5ec"/><text x="'+(left-9)+'" y="'+(y+4)+'" text-anchor="end" font-size="13" fill="#67758a">'+tick+'%</text>'}
+ svg+='<path d="'+line('b')+'" fill="none" stroke="#128a9b" stroke-width="3"/><path d="'+line('a')+'" fill="none" stroke="#6b5bb1" stroke-width="3"/>';
+ values.forEach((v,i)=>{let x=px(i);svg+='<circle cx="'+x+'" cy="'+py(v.b)+'" r="4" fill="#128a9b"/><circle cx="'+x+'" cy="'+py(v.a)+'" r="4" fill="#6b5bb1"/>';if(values.length<=20)svg+='<text x="'+x+'" y="'+(height-18)+'" text-anchor="middle" font-size="12" fill="#526b7d">'+v.week+'</text>'});
+ svg+='</svg><p class="muted"><span style="color:#128a9b">●</span> พฤติกรรม (% ของ 15) &nbsp; <span style="color:#6b5bb1">●</span> คุณลักษณะ (% ของ 18) • ตัวเลขแกนนอน = สัปดาห์ที่มีการประเมิน</p>';
+ $('trend').className='';$('trend').innerHTML=svg;
+}
+async function load(){
+ if(!$('code').value||!$('room').value.trim()){$('message').textContent='กรุณากรอกรหัสครูและห้องเรียน';return}
+ $('message').textContent='กำลังอ่านผลประเมินที่บันทึกจริง...';
+ try{const res=await fetch(API,{method:'POST',headers:{'content-type':'application/json','x-teacher-code':$('code').value},body:JSON.stringify({action:'list',class_code:$('room').value.trim()})});
+ const json=await res.json();if(!res.ok||!json.ok)throw Error(json.error||'ไม่สามารถโหลดข้อมูล');
+ allRows=safeRows(json.rows);loadedRoom=$('room').value.trim();
+ const ids=[...new Map(allRows.map(x=>[x.student_code,x.student_name])).entries()].sort((a,b)=>a[0].localeCompare(b[0],'th',{numeric:true}));
+ $('student').innerHTML='<option value="all">นักเรียนทุกคน</option>'+ids.map(([id,name])=>'<option value="'+esc(id)+'">'+esc(id+' '+name)+'</option>').join('');
+ $('message').textContent='โหลดข้อมูล '+allRows.length+' ครั้ง ของนักเรียน '+ids.length+' คน จากฐานข้อมูลกลางแล้ว';render();
+ }catch(e){allRows=[];selectedRows=[];loadedRoom='';$('message').textContent='เกิดข้อผิดพลาด: '+e.message;render()}
+}
+function downloadCSV(){
+ if(!loadedRoom){alert('กรุณาเข้าสู่ระบบและโหลดข้อมูลก่อน');return}
+ const columns=['class_code','student_code','student_name','assessment_week','session_no','teaching_date',...bNames.map((_,i)=>'behavior_'+(i+1)),...aNames.map((_,i)=>'attribute_'+(i+1)),'behavior_total','attribute_total','combined_total','evaluator_name','note','assessed_at'];
+ const rows=selectedRows.map(x=>[x.class_code,x.student_code,x.student_name,x.assessment_week,x.session_no,x.teaching_date,...x.behavior_scores,...x.attribute_scores,total(x.behavior_scores),total(x.attribute_scores),total(x.behavior_scores.concat(x.attribute_scores)),x.evaluator_name,x.note||'',x.assessed_at]);
+ const csv='\ufeff'+[columns,...rows].map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');
+ const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='Robotics-ROS-assessment-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+['scope','week','session','student'].forEach(id=>$(id).addEventListener('change',()=>{if(loadedRoom)render()}));
+$('week').disabled=true;$('session').disabled=true;
+</script></body></html>
